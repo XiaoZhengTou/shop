@@ -1,0 +1,367 @@
+generator client {
+  provider = "prisma-client-js"
+  // NOTE: Remove postgresqlExtensions when pgvector is not available in dev
+  // previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // NOTE: Enable pgvector extension in production with pgvector-enabled PostgreSQL
+  // extensions = [pgvector(map: "vector")]
+}
+
+// ============================================================
+// AUTH MODELS (NextAuth.js v5 / Auth.js)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // hashed; null for OAuth-only users
+  image         String?
+  role          UserRole  @default(CUSTOMER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  cartItems     CartItem[]
+  orders        Order[]
+  conversations Conversation[]
+  marketingJobs MarketingJob[]
+  wishlists     Wishlist[]
+  reviews       Review[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// E-COMMERCE MODELS
+// ============================================================
+
+model Product {
+  id              String        @id @default(cuid())
+  sku             String        @unique
+  titleZh         String        // Chinese title
+  titleEn         String        // English title
+  descriptionZh   String        @db.Text
+  descriptionEn   String        @db.Text
+  price           Decimal       @db.Decimal(10, 2)
+  stock           Int           @default(0)
+  category        String
+  images          String[]      // Array of image URLs
+  tags            String[]
+  status          ProductStatus @default(DRAFT)
+  targetMarket    TargetMarket  @default(BOTH)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+  vector      ProductVector?
+  aiContents  AiContent[]
+  wishlists   Wishlist[]
+  reviews     Review[]
+
+  @@index([category])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductVector {
+  id        String                      @id @default(cuid())
+  productId String                      @unique
+  embedding String?  // pgvector(1536) in production; String? for dev without pgvector
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_vectors")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  userId      String
+  status      OrderStatus @default(PENDING)
+  totalPrice  Decimal     @db.Decimal(10, 2)
+  currency    String      @default("CNY")
+  market      TargetMarket @default(DOMESTIC)
+  notes       String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Orders are preserved for business records even if user account is deleted
+  // User deletion is blocked (Restrict) when they have orders
+  user  User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)  // Price at time of order
+  createdAt DateTime @default(now())
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Product deletion is blocked if referenced by any order (audit trail)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("order_items")
+}
+
+// ============================================================
+// AI / CUSTOMER SERVICE MODELS
+// ============================================================
+
+model Conversation {
+  id          String             @id @default(cuid())
+  userId      String?            // null for anonymous
+  status      ConversationStatus @default(ACTIVE)
+  summary     String?            @db.Text  // AI-generated summary for escalation
+  language    String             @default("zh")  // "zh" or "en"
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String      @db.Text
+  toolName       String?     // For tool use messages
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+// AI-generated content awaiting human review
+model AiContent {
+  id          String          @id @default(cuid())
+  productId   String?
+  type        AiContentType
+  market      TargetMarket    @default(BOTH)
+  content     Json            // Raw generated content (ZH + EN fields)
+  status      AiContentStatus @default(PENDING_REVIEW)
+  reviewNote  String?         @db.Text
+  reviewedAt  DateTime?
+  reviewedBy  String?         // Admin user ID
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("ai_contents")
+}
+
+// Knowledge base for RAG customer service
+model KnowledgeBase {
+  id        String                      @id @default(cuid())
+  category  String                      // "faq", "policy", "size_guide", "product"
+  titleZh   String
+  titleEn   String
+  contentZh String                      @db.Text
+  contentEn String                      @db.Text
+  tags      String[]
+  embedding String?  // pgvector(1536) in production; String? for dev without pgvector
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  @@index([category])
+  @@map("knowledge_base")
+}
+
+// Scheduled marketing jobs (abandoned cart, campaigns)
+model MarketingJob {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        MarketingJobType
+  status      JobStatus       @default(PENDING)
+  channel     String          // "email" | "push" | "sms"
+  scheduledAt DateTime
+  sentAt      DateTime?
+  payload     Json            // Template variables, coupon code, etc.
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status, scheduledAt])
+  @@map("marketing_jobs")
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("wishlists")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int      // 1-5
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+}
+
+enum TargetMarket {
+  DOMESTIC   // Chinese market (CNY, ZH)
+  CROSSBORDER // International (USD, EN)
+  BOTH
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+  RETURN_REQUESTED
+  RETURN_APPROVED
+  RETURN_COMPLETED
+}
+
+enum ConversationStatus {
+  ACTIVE
+  RESOLVED
+  ESCALATED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+enum AiContentType {
+  PRODUCT_LISTING    // Title + description
+  MARKETING_COPY     // Social media content
+  VIDEO_SCRIPT       // TikTok/short video script
+  EMAIL_TEMPLATE     // Marketing email
+}
+
+enum AiContentStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum MarketingJobType {
+  ABANDONED_CART_1   // 30min after abandonment
+  ABANDONED_CART_2   // 24h after abandonment
+  ABANDONED_CART_3   // 72h after abandonment
+  CAMPAIGN           // General marketing campaign
+}
+
+enum JobStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}

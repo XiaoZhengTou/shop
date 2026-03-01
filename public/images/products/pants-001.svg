@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#EEF0F5"/>
+  <rect x="1" y="1" width="598" height="798" fill="none" stroke="#D5D8E5" stroke-width="1"/>
+  <path d="M250 160 L350 160 L370 300 L340 480 L310 480 L300 360 L290 480 L260 480 L230 300 Z" fill="none" stroke="#A0A8C0" stroke-width="2"/>
+  <text x="300" y="540" font-family="Georgia,serif" font-size="13" fill="#808898" text-anchor="middle">Wide-Leg Trousers</text>
+  <text x="300" y="560" font-family="Georgia,serif" font-size="11" fill="#A0A8C0" text-anchor="middle">StyleAI</text>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#1A1A1A"/>
+  <rect x="1" y="1" width="598" height="798" fill="none" stroke="#333" stroke-width="1"/>
+  <path d="M230 180 L270 200 L300 190 L330 200 L370 180 L390 260 L370 400 L230 400 L210 260 Z" fill="none" stroke="#555" stroke-width="2"/>
+  <line x1="300" y1="200" x2="300" y2="390" stroke="#444" stroke-width="1"/>
+  <text x="300" y="520" font-family="Georgia,serif" font-size="13" fill="#888" text-anchor="middle">Classic Blazer</text>
+  <text x="300" y="540" font-family="Georgia,serif" font-size="11" fill="#666" text-anchor="middle">StyleAI</text>
+</svg>
