@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { randomUUID } from "crypto";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -23,11 +22,24 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const filename = `uploads/${randomUUID()}.${ext}`;
+    const filename = `${randomUUID()}.${ext}`;
 
-    const blob = await put(filename, file, { access: "public" });
+    // Production: use Vercel Blob
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const { put } = await import("@vercel/blob");
+      const blob = await put(`uploads/${filename}`, file, { access: "public" });
+      return NextResponse.json({ url: blob.url });
+    }
 
-    return NextResponse.json({ url: blob.url });
+    // Development: write to local public/uploads
+    const { writeFile, mkdir } = await import("fs/promises");
+    const { join } = await import("path");
+    const uploadDir = join(process.cwd(), "public", "uploads");
+    await mkdir(uploadDir, { recursive: true });
+    const bytes = await file.arrayBuffer();
+    await writeFile(join(uploadDir, filename), Buffer.from(bytes));
+    return NextResponse.json({ url: `/uploads/${filename}` });
+
   } catch (error) {
     console.error("[POST /api/admin/upload]", error);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
