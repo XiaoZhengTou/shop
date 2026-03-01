@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { Package, ShoppingBag, MessageSquare, TrendingUp } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 async function getStats() {
   try {
     const [productCount, orderCount, conversationCount, pendingAiContent] =

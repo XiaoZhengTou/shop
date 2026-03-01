@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import ProductCard from "@/components/store/ProductCard";
 import Image from "next/image";
 
+export const dynamic = "force-dynamic";
+
 async function getFeaturedProducts() {
   try {
     return await prisma.product.findMany({
@@ -124,7 +126,7 @@ export default async function HomePage() {
       {/* Brand Story */}
       <section className="relative py-24 md:py-32 overflow-hidden">
         <div className="absolute inset-0 z-0">
-          <Image src="/uploads/c1fcb866-fae7-4f14-b639-3862c708f0ff.png"
+          <Image src="/images/products/index/image1.png"
             alt="Brand Story" fill className="object-cover object-center" />
           <div className="absolute inset-0 bg-neutral-900/80" />
         </div>
