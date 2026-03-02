@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, EyeOff, Eye } from "lucide-react";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 interface Product {
   id: string;
@@ -89,7 +90,7 @@ export default function ProductTable({ products }: { products: Product[] }) {
                       {product.images[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={product.images[0]}
+                          src={toDisplayImageUrl(product.images[0])}
                           alt={product.titleZh}
                           className="w-full h-full object-cover"
                         />

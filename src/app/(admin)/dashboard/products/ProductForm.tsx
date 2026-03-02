@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Upload, X, ImagePlus } from "lucide-react";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 interface ProductFormData {
   sku: string;
@@ -47,7 +48,9 @@ export default function ProductForm({ initialData, productId }: ProductFormProps
     status: initialData?.status ?? "DRAFT",
   });
 
-  const [images, setImages] = useState<string[]>(initialData?.images ?? []);
+  const [images, setImages] = useState<string[]>(
+    (initialData?.images ?? []).map(toDisplayImageUrl)
+  );
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -76,7 +79,7 @@ export default function ProductForm({ initialData, productId }: ProductFormProps
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (res.ok) {
-        setImages((prev) => [...prev, data.url]);
+        setImages((prev) => [...prev, toDisplayImageUrl(data.url)]);
       } else {
         setUploadError(data.error || "上传失败");
       }
@@ -148,7 +151,7 @@ export default function ProductForm({ initialData, productId }: ProductFormProps
             {images.map((url) => (
               <div key={url} className="relative aspect-square bg-neutral-100 border border-neutral-200 overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={toDisplayImageUrl(url)} alt="" className="absolute inset-0 w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => removeImage(url)}

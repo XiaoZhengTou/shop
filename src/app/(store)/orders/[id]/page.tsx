@@ -3,6 +3,7 @@ import { CheckCircle, Clock, Truck, PackageCheck, XCircle, RotateCcw } from "luc
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import MockPayButton from "./MockPayButton";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 interface OrderAddress {
   name: string;
@@ -197,7 +198,7 @@ export default async function OrderDetailPage({
             <div className="w-16 h-20 bg-neutral-50 flex-shrink-0 overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={item.product.images[0] || "/images/placeholder.svg"}
+                src={toDisplayImageUrl(item.product.images[0] || "/images/placeholder.svg")}
                 alt={item.product.titleZh}
                 className="w-full h-full object-cover"
               />

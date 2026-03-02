@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { put } from "@vercel/blob";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
@@ -60,8 +61,9 @@ export async function POST(request: NextRequest) {
           contentType: file.type,
         });
         
-        // For private blobs, the URL returned is already a signed URL that can be accessed
-        return NextResponse.json({ url: blob.url });
+        // For private stores, the raw blob URL is not browser-accessible (403).
+        // Return a same-origin proxy URL that our app can serve.
+        return NextResponse.json({ url: toDisplayImageUrl(blob.url), pathname: blob.pathname });
       } catch (blobError: any) {
         console.error("[POST /api/admin/upload] Vercel Blob error:", blobError);
         console.error("Error details:", {

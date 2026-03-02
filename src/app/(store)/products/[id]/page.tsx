@@ -6,6 +6,7 @@ import AddToCartButton from "@/components/store/AddToCartButton";
 import WishlistButton from "@/components/store/WishlistButton";
 import ReviewsSection from "@/components/store/ReviewsSection";
 import ProductCard from "@/components/store/ProductCard";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
@@ -39,7 +40,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   if (!product || product.status !== "ACTIVE") notFound();
 
   const related = await getRelated(product.category, product.id);
-  const imageUrl = product.images[0] || "/images/placeholder.svg";
+  const imageUrl = toDisplayImageUrl(product.images[0] || "/images/placeholder.svg");
 
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-12">
@@ -91,7 +92,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 titleZh: product.titleZh,
                 titleEn: product.titleEn,
                 price: product.price.toString(),
-                image: product.images[0] || "/images/placeholder.svg",
+                image: toDisplayImageUrl(product.images[0] || "/images/placeholder.svg"),
                 category: product.category,
               }}
             />

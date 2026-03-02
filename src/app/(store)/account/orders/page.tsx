@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Package, ArrowRight } from "lucide-react";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "待支付",
@@ -119,7 +120,7 @@ export default async function AccountOrdersPage() {
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={item.product.images[0] || "/images/placeholder.svg"}
+                      src={toDisplayImageUrl(item.product.images[0] || "/images/placeholder.svg")}
                       alt={item.product.titleZh}
                       className="w-full h-full object-cover"
                     />

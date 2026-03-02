@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { ShoppingBag } from "lucide-react";
 import { useCartStore } from "@/lib/store/cart";
+import { toDisplayImageUrl } from "@/lib/blob-image";
 
 interface ProductCardProps {
   id: string;
@@ -27,14 +28,14 @@ export default function ProductCard({
   locale = "zh",
 }: ProductCardProps) {
   const title = locale === "zh" ? titleZh : titleEn;
-  const [src, setSrc] = useState(images[0] || PLACEHOLDER);
+  const [src, setSrc] = useState(toDisplayImageUrl(images[0] || PLACEHOLDER));
   const displayPrice = typeof price === "string" ? parseFloat(price) : price;
   const addItem = useCartStore((s) => s.addItem);
   const [added, setAdded] = useState(false);
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault(); // Don't navigate to product page
-    addItem({ id, titleZh, titleEn, price: displayPrice, image: src, category });
+    addItem({ id, titleZh, titleEn, price: displayPrice, image: toDisplayImageUrl(src), category });
     setAdded(true);
     setTimeout(() => setAdded(false), 1200);
   };
