@@ -1,11 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { getOrderStatus, searchKnowledgeBase, TOOL_DEFINITIONS } from "@/lib/tools/order-tools";
+import { getOrderStatus, searchKnowledgeBase } from "@/lib/tools/order-tools";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const SILICONFLOW_API_KEY = process.env.SILICONFLOW_API_KEY!;
+const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL = "Pro/zai-org/GLM-4.7";
 const MAX_TOKENS = 1024;
 const MAX_TOOL_ROUNDS = 3;
 
@@ -29,6 +27,78 @@ export interface ServiceChainOutput {
   needsEscalation: boolean;
   toolsUsed: string[];
 }
+
+// OpenAI-compatible message types
+type OAIMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: OAIToolCall[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+interface OAIToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+interface OAIResponse {
+  choices: Array<{
+    message: {
+      role: string;
+      content: string | null;
+      tool_calls?: OAIToolCall[];
+    };
+    finish_reason: string;
+  }>;
+}
+
+// ============================================================
+// OpenAI-format Tool Definitions
+// ============================================================
+
+const TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "get_order_status",
+      description:
+        "Query the status, items, and details of a specific order by order ID. Use when customer asks about their order.",
+      parameters: {
+        type: "object",
+        properties: {
+          order_id: {
+            type: "string",
+            description: "The order ID to look up",
+          },
+        },
+        required: ["order_id"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_knowledge_base",
+      description:
+        "Search the knowledge base for FAQs, policies, size guides, and product information. Use for general questions about returns, shipping, sizing, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query",
+          },
+          language: {
+            type: "string",
+            enum: ["zh", "en"],
+            description: "Language for the response (zh for Chinese, en for English)",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+];
 
 // ============================================================
 // System Prompts
@@ -65,6 +135,34 @@ Guidelines:
 Never make promises you cannot keep.`;
 
 // ============================================================
+// API call
+// ============================================================
+
+async function callSiliconFlow(messages: OAIMessage[]): Promise<OAIResponse> {
+  const res = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SILICONFLOW_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`SiliconFlow API error ${res.status}: ${text}`);
+  }
+
+  return res.json() as Promise<OAIResponse>;
+}
+
+// ============================================================
 // Tool Executor
 // ============================================================
 
@@ -99,29 +197,23 @@ export async function runServiceChain(
   const systemPrompt = language === "en" ? SYSTEM_EN : SYSTEM_ZH;
   const toolsUsed: string[] = [];
 
-  // Convert chat history to Anthropic format
-  const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  // Build initial messages with system prompt
+  const currentMessages: OAIMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...messages.map((m) => ({ role: m.role, content: m.content } as OAIMessage)),
+  ];
 
   let rounds = 0;
-  let currentMessages = [...anthropicMessages];
 
   // Tool use loop (max MAX_TOOL_ROUNDS rounds)
   while (true) {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      tools: TOOL_DEFINITIONS,
-      messages: currentMessages,
-    });
+    const response = await callSiliconFlow(currentMessages);
+    const choice = response.choices[0];
+    const message = choice.message;
 
-    // If no tool use, we have our final answer
-    if (response.stop_reason !== "tool_use") {
-      const replyContent = response.content.find((c) => c.type === "text");
-      const reply = replyContent?.type === "text" ? replyContent.text : "";
+    // If no tool calls, we have our final answer
+    if (choice.finish_reason !== "tool_calls" || !message.tool_calls?.length) {
+      const reply = message.content ?? "";
 
       const needsEscalation =
         reply.includes("[ESCALATE]") ||
@@ -138,39 +230,31 @@ export async function runServiceChain(
 
     // Max rounds guard
     if (++rounds >= MAX_TOOL_ROUNDS) {
-      const replyContent = response.content.find((c) => c.type === "text");
       const fallback =
-        replyContent?.type === "text"
-          ? replyContent.text
-          : language === "zh"
+        message.content ??
+        (language === "zh"
           ? "抱歉，处理您的请求时遇到问题，请稍后再试或联系人工客服。"
-          : "Sorry, I encountered an issue processing your request. Please try again or contact support.";
+          : "Sorry, I encountered an issue processing your request. Please try again or contact support.");
       return { reply: fallback, needsEscalation: false, toolsUsed };
     }
 
-    // Process tool calls
-    const toolUseBlocks = response.content.filter((c) => c.type === "tool_use");
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    // Add assistant message with tool_calls to history
+    currentMessages.push({
+      role: "assistant",
+      content: message.content ?? null,
+      tool_calls: message.tool_calls,
+    });
 
-    for (const block of toolUseBlocks) {
-      if (block.type !== "tool_use") continue;
-      toolsUsed.push(block.name);
-      const result = await executeTool(
-        block.name,
-        block.input as Record<string, string>
-      );
-      toolResults.push({
-        type: "tool_result",
-        tool_use_id: block.id,
+    // Execute each tool call and append results
+    for (const toolCall of message.tool_calls) {
+      toolsUsed.push(toolCall.function.name);
+      const toolInput = JSON.parse(toolCall.function.arguments) as Record<string, string>;
+      const result = await executeTool(toolCall.function.name, toolInput);
+      currentMessages.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
         content: result,
       });
     }
-
-    // Add assistant response + tool results to message history
-    currentMessages = [
-      ...currentMessages,
-      { role: "assistant", content: response.content },
-      { role: "user", content: toolResults },
-    ];
   }
 }
