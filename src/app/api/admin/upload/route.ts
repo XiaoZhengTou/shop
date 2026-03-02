@@ -54,11 +54,13 @@ export async function POST(request: NextRequest) {
         
         // Upload to Vercel Blob
         // Note: BLOB_READ_WRITE_TOKEN must be set in Vercel project settings
+        // Using "private" access to match the Blob store configuration
         const blob = await put(`uploads/${filename}`, buffer, {
-          access: "public",
+          access: "private",
           contentType: file.type,
         });
         
+        // For private blobs, the URL returned is already a signed URL that can be accessed
         return NextResponse.json({ url: blob.url });
       } catch (blobError: any) {
         console.error("[POST /api/admin/upload] Vercel Blob error:", blobError);
