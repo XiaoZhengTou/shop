@@ -28,7 +28,12 @@ export default auth((req) => {
     }
   }
 
-  return NextResponse.next();
+  // Add security headers (helps avoid edge/mobile oddities; safe defaults)
+  const res = NextResponse.next();
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("X-Frame-Options", "SAMEORIGIN");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  return res;
 });
 
 export const config = {

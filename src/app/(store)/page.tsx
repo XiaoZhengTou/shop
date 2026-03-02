@@ -12,7 +12,9 @@ async function getFeaturedProducts() {
       take: 4,
       orderBy: { createdAt: "desc" },
     });
-  } catch {
+  } catch (error) {
+    console.error("[HomePage] Failed to fetch products:", error);
+    // Return empty array to prevent page crash
     return [];
   }
 }
